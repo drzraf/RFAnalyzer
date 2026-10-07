@@ -71,6 +71,20 @@ void rfax_rtl433_set_center_frequency(rfax_rtl433 *h, uint32_t center_frequency)
  */
 void rfax_rtl433_set_channel(rfax_rtl433 *h, int32_t offset_hz, uint32_t bandwidth_hz);
 
+/*
+ * Registers an additional "flex" decoder from an rtl_433 `-X` spec string,
+ * e.g. "n=ook,m=OOK_PWM,s=467,l=927,r=2000,g=0,t=0,y=0". This lets unknown
+ * devices be decoded without building a dedicated protocol. May be called
+ * multiple times to register several flex decoders. Returns 0 on success and
+ * -1 if the spec is empty or could not be parsed.
+ *
+ * The flex device is added to the running decoder, so call it right after
+ * rfax_rtl433_create() and before feeding samples (or recreate the decoder to
+ * replace the set, since there is no API to remove a single flex decoder).
+ * Must be called on the same thread as rfax_rtl433_feed().
+ */
+int rfax_rtl433_add_flex(rfax_rtl433 *h, char const *spec);
+
 /* Registers the decoded-event callback. */
 void rfax_rtl433_set_output(rfax_rtl433 *h, rfax_output_cb cb, void *user);
 

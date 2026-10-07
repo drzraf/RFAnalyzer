@@ -1,26 +1,36 @@
 package com.mantz_it.rfanalyzer.ui.composable
 
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,11 +40,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mantz_it.rfanalyzer.decoder.DecodedEvent
+import com.mantz_it.rfanalyzer.decoder.FlexDecoder
 import kotlinx.coroutines.delay
 
 /**
@@ -70,6 +82,8 @@ data class DecoderTabActions(
     val onShowLogClicked: () -> Unit,
     val onSaveLogToFileClicked: (Uri) -> Unit,
     val onShareLogClicked: () -> Unit,
+    /** Replaces the whole list of custom (flex) decoder specs. */
+    val onFlexDecodersChanged: (List<String>) -> Unit,
 )
 
 @Composable
@@ -87,6 +101,7 @@ fun DecoderTabComposable(
     logFilePath: String,
     eventCount: Int,
     events: List<DecodedEvent>,
+    flexDecoders: List<FlexDecoder>,
     decoderTabActions: DecoderTabActions,
 ) {
     val destinationFileChooser = rememberCreateFilePicker(
@@ -162,6 +177,11 @@ fun DecoderTabComposable(
                 isChecked = reportMeta,
                 onCheckedChange = decoderTabActions.onReportMetaChanged,
                 helpSubPath = "decoding.html"
+            )
+
+            FlexDecoderSection(
+                decoders = flexDecoders,
+                onChanged = decoderTabActions.onFlexDecodersChanged,
             )
 
             OutlinedBox(label = "Status") {
@@ -290,4 +310,202 @@ fun DecoderStatusBadge(
             )
         }
     }
+}
+
+/** One-click starting points for the flex editor. */
+private val FLEX_PRESETS: List<Pair<String, FlexDecoder>> = listOf(
+    // The 29-bit length is what keeps flex from emitting every noise pulse-train
+    // as a 1-13 bit row; without it the decoder drowns in fragments.
+    "OOK PWM 467/927 us (OOK remote)" to FlexDecoder(
+        name = "OOK467", modulation = "OOK_PWM",
+        shortWidth = 467f, longWidth = 927f, resetLimit = 2000f, gapLimit = 0f, tolerance = 0f,
+        bits = 29,
+    ),
+    "OOK PWM 368/704 us (curtain/awning)" to FlexDecoder(
+        name = "OOK368", modulation = "OOK_PWM",
+        shortWidth = 368f, longWidth = 704f, resetLimit = 10000f, gapLimit = 10000f, syncWidth = 5628f,
+    ),
+    "OOK PPM 464/948 us" to FlexDecoder(
+        name = "PPM", modulation = "OOK_PPM",
+        shortWidth = 464f, longWidth = 948f, resetLimit = 2000f, gapLimit = 1200f,
+    ),
+    "OOK Manchester 467 us" to FlexDecoder(
+        name = "MC", modulation = "OOK_MC_ZEROBIT",
+        shortWidth = 467f, resetLimit = 942f,
+    ),
+)
+
+/**
+ * Section listing the user-defined flex decoders with add / edit / delete. The
+ * list is stored as raw spec strings in [DecoderTabActions.onFlexDecodersChanged].
+ */
+@Composable
+private fun FlexDecoderSection(
+    decoders: List<FlexDecoder>,
+    onChanged: (List<String>) -> Unit,
+) {
+    var showEditor by remember { mutableStateOf(false) }
+    var editingIndex by remember { mutableStateOf(-1) }
+    var draft by remember { mutableStateOf(FlexDecoder()) }
+
+    OutlinedBox(label = "Custom Decoders (flex)") {
+        Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+            Text(
+                "Decode devices that have no built-in protocol by describing their " +
+                    "modulation and pulse timings (rtl_433 -X). Several decoders can run at once.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            if (decoders.isEmpty()) {
+                Text(
+                    "No custom decoders.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            decoders.forEachIndexed { index, decoder ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = decoder.summary(),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = {
+                        draft = decoder; editingIndex = index; showEditor = true
+                    }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit decoder")
+                    }
+                    IconButton(onClick = {
+                        val list = decoders.toMutableList().also { it.removeAt(index) }
+                        onChanged(list.map { it.toSpec() })
+                    }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete decoder")
+                    }
+                }
+            }
+            Button(
+                onClick = {
+                    draft = FLEX_PRESETS.first().second.copy(name = "flex${decoders.size + 1}")
+                    editingIndex = -1
+                    showEditor = true
+                },
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Add decoder")
+            }
+        }
+    }
+
+    if (showEditor) {
+        FlexDecoderEditorDialog(
+            initial = draft,
+            onDismiss = { showEditor = false },
+            onSave = { decoder ->
+                val list = decoders.toMutableList()
+                if (editingIndex in list.indices) list[editingIndex] = decoder else list.add(decoder)
+                onChanged(list.map { it.toSpec() })
+                showEditor = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun FlexDecoderEditorDialog(
+    initial: FlexDecoder,
+    onDismiss: () -> Unit,
+    onSave: (FlexDecoder) -> Unit,
+) {
+    var decoder by remember { mutableStateOf(initial) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Custom (flex) decoder") },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
+                Text("Presets", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FLEX_PRESETS.forEach { (label, preset) ->
+                    TextButton(onClick = {
+                        decoder = preset.copy(name = decoder.name.ifBlank { preset.name })
+                    }) {
+                        Text(label, fontSize = 12.sp)
+                    }
+                }
+                OutlinedTextField(
+                    value = decoder.name,
+                    onValueChange = { decoder = decoder.copy(name = it) },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                )
+                OutlinedListDropDown(
+                    label = "Modulation",
+                    items = FlexDecoder.MODULATIONS,
+                    selectedItem = decoder.modulation.takeIf { it in FlexDecoder.MODULATIONS }
+                        ?: FlexDecoder.MODULATIONS.first(),
+                    getDisplayName = { it },
+                    onSelectionChanged = { decoder = decoder.copy(modulation = it) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+                FlexNumberField("Short width (us)", decoder.shortWidth) { decoder = decoder.copy(shortWidth = it) }
+                FlexNumberField("Long width (us)", decoder.longWidth) { decoder = decoder.copy(longWidth = it) }
+                FlexNumberField("Reset limit (us)", decoder.resetLimit) { decoder = decoder.copy(resetLimit = it) }
+                FlexNumberField("Gap limit (us)", decoder.gapLimit) { decoder = decoder.copy(gapLimit = it) }
+                FlexNumberField("Sync width (us)", decoder.syncWidth) { decoder = decoder.copy(syncWidth = it) }
+                FlexNumberField("Tolerance (us)", decoder.tolerance) { decoder = decoder.copy(tolerance = it) }
+                OutlinedTextField(
+                    value = decoder.bits?.toString() ?: "",
+                    onValueChange = { decoder = decoder.copy(bits = it.trim().toIntOrNull()) },
+                    label = { Text("Bits (optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                )
+                OutlinedTextField(
+                    value = decoder.rawSpec,
+                    onValueChange = { decoder = decoder.copy(rawSpec = it) },
+                    label = { Text("Raw spec (advanced)") },
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                )
+                Text(
+                    "Spec: " + decoder.toSpec(),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(decoder) }, enabled = decoder.isValid()) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun FlexNumberField(label: String, value: Float?, onValueChanged: (Float?) -> Unit) {
+    OutlinedTextField(
+        value = value?.let { FlexDecoder.formatNumber(it) } ?: "",
+        onValueChange = { text ->
+            val trimmed = text.trim()
+            onValueChanged(if (trimmed.isEmpty()) null else trimmed.toFloatOrNull())
+        },
+        label = { Text(label) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+    )
 }

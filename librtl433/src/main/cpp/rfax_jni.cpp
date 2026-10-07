@@ -154,6 +154,20 @@ Java_com_mantz_1it_librtl433_Rtl433Native_nativeSetOptions(JNIEnv * /*env*/, job
                 static_cast<float>(minSnr));
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_com_mantz_1it_librtl433_Rtl433Native_nativeAddFlex(JNIEnv *env, jobject /*thiz*/,
+        jlong handle, jstring spec)
+{
+    RfaxHolder *h = reinterpret_cast<RfaxHolder *>(handle);
+    if (!h || !h->decoder || !spec)
+        return -1;
+    const char *utf = env->GetStringUTFChars(spec, nullptr);
+    int rc = utf ? rfax_rtl433_add_flex(h->decoder, utf) : -1;
+    if (utf)
+        env->ReleaseStringUTFChars(spec, utf);
+    return rc;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_mantz_1it_librtl433_Rtl433Native_nativeFeed(JNIEnv *env, jobject /*thiz*/,
         jlong handle, jfloatArray samples)

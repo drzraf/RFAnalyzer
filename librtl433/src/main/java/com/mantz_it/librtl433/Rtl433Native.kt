@@ -67,6 +67,16 @@ class Rtl433Native {
             nativeSetOptions(handle, conversionMode, if (autoLevel) 1 else 0, if (reportMeta) 1 else 0, minSnr)
     }
 
+    /**
+     * Registers an extra "flex" decoder from an rtl_433 `-X` spec string, e.g.
+     * `n=ook,m=OOK_PWM,s=467,l=927,r=2000,g=0,t=0,y=0`. Call it right after
+     * [create] and before feeding. Returns false if the spec was rejected.
+     */
+    fun addFlex(spec: String): Boolean {
+        if (handle == 0L) return false
+        return nativeAddFlex(handle, spec) == 0
+    }
+
     /** Feeds interleaved IQ samples: [i0, q0, i1, q1, ...] in roughly [-1, 1]. */
     fun feed(samples: FloatArray) {
         if (handle != 0L) nativeFeed(handle, samples)
@@ -98,6 +108,7 @@ class Rtl433Native {
     private external fun nativeSetCenterFrequency(handle: Long, centerFrequency: Long)
     private external fun nativeSetChannel(handle: Long, offsetHz: Int, bandwidthHz: Int)
     private external fun nativeSetOptions(handle: Long, conversionMode: Int, autoLevel: Int, reportMeta: Int, minSnr: Float)
+    private external fun nativeAddFlex(handle: Long, spec: String): Int
     private external fun nativeFeed(handle: Long, samples: FloatArray)
     private external fun nativeFlush(handle: Long)
     private external fun nativeDestroy(handle: Long)

@@ -793,6 +793,15 @@ class AnalyzerService : Service() {
         s.collectAppState(asr.decoderMinSnr) { decoder?.applyOptions() }
         s.collectAppState(asr.decoderReportMeta) { decoder?.applyOptions() }
         s.collectAppState(asr.decoderLogToFile) { decoder?.setLogToFile(it) }
+        // Flex decoders are registered when the native decoder is created and
+        // cannot be removed individually, so recreate it to apply list changes.
+        s.collectAppState(asr.decoderFlexDecoders) {
+            if (decoder != null) {
+                stopDecoder()
+                if (asr.decoderEnabled.value && source != null && scheduler != null)
+                    startDecoder()
+            }
+        }
 
         // settings tab
         s.collectAppState(asr.loggingEnabled) {

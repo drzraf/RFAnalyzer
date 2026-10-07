@@ -42,6 +42,13 @@
  */
 extern void rfax_sdr_feed(unsigned char *iq_buf, uint32_t len, void *ctx);
 
+/*
+ * Provided by rtl_433's flex decoder (src/devices/flex.c). Parses a `-X` spec
+ * into an r_device that is then registered like any built-in protocol. Declared
+ * here because rtl_433 only declares it locally in rtl_433.c.
+ */
+extern r_device *flex_create_device(char *spec);
+
 /* CU8 samples staged before a block is handed to the decoder. Mirrors the
  * buffering the file-input path uses; the decoder handles frames that span
  * blocks. */
@@ -295,6 +302,31 @@ void rfax_rtl433_set_center_frequency(rfax_rtl433 *h, uint32_t center_frequency)
     h->center_frequency = center_frequency;
     h->cfg->center_frequency = center_frequency;
     h->cfg->frequency[0] = center_frequency;
+}
+
+int rfax_rtl433_add_flex(rfax_rtl433 *h, char const *spec)
+{
+    if (!h || !h->cfg || !spec || !*spec)
+        return -1;
+
+    /* flex_create_device() takes ownership of a mutable string and parses it;
+     * give it a private copy so the caller's buffer is untouched. */
+    char *dup = strdup(spec);
+    if (!dup)
+        return -1;
+    r_device *dev = flex_create_device(dup);
+    free(dup);
+    if (!dev)
+        return -1;
+
+    register_protocol(h->cfg, dev, "");
+
+    /* A flex spec may add an FSK protocol, which needs the FM demod path that
+     * rfax_rtl433_create() only enables for the built-in protocols. */
+    if (dev->modulation >= FSK_DEMOD_MIN_VAL)
+        h->cfg->demod->enable_FM_demod = 1;
+
+    return 0;
 }
 
 void rfax_rtl433_set_output(rfax_rtl433 *h, rfax_output_cb cb, void *user)

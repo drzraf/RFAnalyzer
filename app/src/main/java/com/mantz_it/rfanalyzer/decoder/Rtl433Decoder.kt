@@ -99,6 +99,7 @@ class Rtl433Decoder(
         worker = Thread({ workerLoop() }, "Thread-Rtl433Decoder-${System.currentTimeMillis()}").apply { start() }
         appStateRepository.decoderRunning.set(true)
         applyOptions()
+        applyFlexDecoders()
         Log.i(TAG, "start: decoder running (rtl_433 ${decoder.version()})")
         return true
     }
@@ -166,6 +167,26 @@ class Rtl433Decoder(
         val reportMeta = appStateRepository.decoderReportMeta.value
         val minSnr = appStateRepository.decoderMinSnr.value
         pendingCommands.add { native?.setOptions(conversion, autoLevel, reportMeta, minSnr) }
+    }
+
+    /**
+     * Registers the user-defined flex decoders (for unrecognised protocols) with
+     * the native decoder. Flex devices cannot be unregistered individually, so
+     * changing the list requires recreating the decoder (see AnalyzerService).
+     */
+    private fun applyFlexDecoders() {
+        if (!running) return
+        val specs = appStateRepository.decoderFlexDecoders.value
+        if (specs.isEmpty()) return
+        pendingCommands.add {
+            specs.forEachIndexed { index, spec ->
+                val ok = native?.addFlex(spec) ?: false
+                if (!ok)
+                    Log.w(TAG, "applyFlexDecoders: flex decoder[$index] rejected: '$spec'")
+                else
+                    Log.i(TAG, "applyFlexDecoders: registered flex decoder[$index]: '$spec'")
+            }
+        }
     }
 
     /** Opens or closes the JSONL log file while decoding is running. */

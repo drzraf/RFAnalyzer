@@ -72,11 +72,58 @@ The controls map onto rtl_433 command line options:
 | Log Decoded Events | `-F json` (one JSON object per line) |
 
 The center frequency and gain follow the SDR settings and are passed to the
-decoder automatically. Advanced rtl_433 features that are intentionally not
-exposed (protocol selection `-R`, flex decoders `-X`, FSK detector mode,
-frequency hopping) can be added without changing the integration surface: the
-decoder exposes a small `setOptions`/`configure` API and the UI is a plain
-Compose tab.
+decoder automatically. Custom (unknown) protocols can be described with the
+**flex decoder** editor (see below), which maps to rtl_433's `-X`. Other
+advanced rtl_433 features that are intentionally not exposed (protocol
+selection `-R`, FSK detector mode, frequency hopping) can be added without
+changing the integration surface: the decoder exposes a small
+`setOptions`/`configure` API and the UI is a plain Compose tab.
+
+## Custom (flex) decoders
+
+Not every device has a built-in rtl_433 protocol. For those, rtl_433 ships the
+"flex" decoder (`-X`), which describes a decoder as a single spec string. RF
+Analyzer exposes it under **Custom Decoders (flex)** in the Decoder tab:
+
+- **Add decoder** opens an editor pre-filled with a preset. Pick a preset such
+  as *OOK PWM 467/927 us*, adjust the fields, and **Save**.
+- Each entry is stored as a spec string and can be **edited** or **deleted**.
+  Several flex decoders can be active at the same time; they run alongside the
+  built-in protocols.
+- The structured fields build the spec:
+
+  | Field | Spec key | Meaning |
+  |---|---|---|
+  | Name | `n=` | label shown in decoded events |
+  | Modulation | `m=` | `OOK_PWM`, `OOK_PPM`, `OOK_PCM`, `OOK_MC_ZEROBIT`, `OOK_DMC`, `FSK_PCM`, … |
+  | Short width | `s=` | short pulse width in µs |
+  | Long width | `l=` | long pulse width in µs |
+  | Reset limit | `r=` | reset the slicer after this gap (µs) |
+  | Gap limit | `g=` | maximum gap inside a frame (µs) |
+  | Sync width | `y=` | sync/preamble pulse width (µs) |
+  | Tolerance | `t=` | timing tolerance (µs) |
+  | Bits | `bits=` | expected frame length |
+
+- **Raw spec (advanced)** overrides the structured fields and accepts the full
+  rtl_433 `-X` syntax, including keys the form does not expose (e.g. `invert`,
+  `reflect`, `repeats>`, `match`).
+
+Example spec for an unknown OOK remote with short 467 µs / long 927 µs pulses
+and 29-bit frames:
+
+```
+n=ook,m=OOK_PWM,s=467,l=927,r=2000,g=0,t=0,bits=29
+```
+
+Set **Bits** (`bits=`) whenever the frame length is known. rtl_433's flex
+decoder emits *every* pulse train that reaches the slicer, so on a noisy band a
+spec without `bits=` floods the event list with 1–13 bit fragments and hides the
+real frame. `bits=<n>` keeps only rows of exactly that length.
+
+When decoding is running, saving a changed list restarts the decoder so the new
+flex decoders take effect. Flex decoders are included in bookmark
+**export/import** (the `flexDecoders` field of the JSON), so a working set can be
+shared or restored with a backup.
 
 ## Channelized decoding
 

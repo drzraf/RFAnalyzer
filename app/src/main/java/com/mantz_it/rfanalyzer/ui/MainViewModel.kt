@@ -717,6 +717,7 @@ class MainViewModel @Inject constructor(
         onShowLogClicked = { sendActionToUi(UiAction.OnShowDecodedLogClicked) },
         onSaveLogToFileClicked = { destUri -> sendActionToUi(UiAction.OnSaveDecodedLogClicked(destUri)) },
         onShareLogClicked = { sendActionToUi(UiAction.OnShareDecodedLogClicked) },
+        onFlexDecodersChanged = { specs -> appStateRepository.decoderFlexDecoders.set(specs) },
     )
 
     val recordingTabActions = RecordingTabActions(

@@ -240,6 +240,8 @@ class AppStateRepository @Inject constructor(
     val decoderMinSnr = Setting("decoderMinSnr", 9f, scope, dataStore)
     val decoderReportMeta = Setting("decoderReportMeta", true, scope, dataStore)
     val decoderLogToFile = Setting("decoderLogToFile", true, scope, dataStore)
+    // User-defined rtl_433 "flex" (-X) decoder specs; see decoder/FlexDecoder.kt
+    val decoderFlexDecoders = Setting("decoderFlexDecoders", emptyList<String>(), scope, dataStore)
     val decoderRunning = MutableState(false)
     val decoderEventCount = MutableState(0)
     val decoderLastModel = MutableState("")

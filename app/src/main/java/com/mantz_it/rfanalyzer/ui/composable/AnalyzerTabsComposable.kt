@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mantz_it.rfanalyzer.database.AppStateRepository
+import com.mantz_it.rfanalyzer.decoder.FlexDecoder
 import com.mantz_it.rfanalyzer.ui.MainViewModel
 
 /**
@@ -157,6 +158,7 @@ fun AnalyzerTabsComposable(
     val decoderLogFilePath by appStateRepository.decoderLogFilePath.stateFlow.collectAsState()
     val decoderEventCount by appStateRepository.decoderEventCount.stateFlow.collectAsState()
     val decodedEvents by appStateRepository.decodedEvents.stateFlow.collectAsState()
+    val decoderFlexDecoders by appStateRepository.decoderFlexDecoders.stateFlow.collectAsState()
     val recordingRunning by appStateRepository.recordingRunning.stateFlow.collectAsState()
     val recordingName by appStateRepository.recordingName.stateFlow.collectAsState()
     val recordOnlyWhenSquelchIsSatisfied by appStateRepository.recordOnlyWhenSquelchIsSatisfied.stateFlow.collectAsState()
@@ -305,6 +307,7 @@ fun AnalyzerTabsComposable(
                         logFilePath = decoderLogFilePath,
                         eventCount = decoderEventCount,
                         events = decodedEvents,
+                        flexDecoders = decoderFlexDecoders.map { FlexDecoder.fromSpec(it) },
                         decoderTabActions = decoderTabActions
                     )
                 AnalyzerTabs.RECORDING
